@@ -49,7 +49,9 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-Tags containing a hyphen publish prereleases. To build the same archives locally,
+Existing tags can also be published from Actions → Release → Run workflow by
+entering the tag. Both tests and binaries use that exact tag. Tags containing a
+hyphen publish prereleases. To build the same archives locally,
 run `scripts/build-release.sh v0.1.1 dist`. CI runs race tests against a real
 systemd user manager before a release can be published.
 
