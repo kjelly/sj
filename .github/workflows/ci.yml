@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare temporary files and systemd user manager
+        shell: bash
+        run: |
+          task_tmp=$(mktemp -d /tmp/codex-task.XXXXXX)
+          echo "TMPDIR=$task_tmp" >> "$GITHUB_ENV"
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Test with race detector and real systemd
+        env:
+          SJ_SYSTEMD_TEST: '1'
+        run: go test -race -p 2 ./...
+      - name: Vet
+        run: go vet -p 2 ./...
+      - name: Clean temporary files
+        if: always()
+        shell: bash
+        run: |
+          if [[ ${TMPDIR:-} == /tmp/codex-task.* ]]; then
+            rm -rf -- "$TMPDIR"
+          fi

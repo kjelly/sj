@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build Linux archives
+        shell: bash
+        run: |
+          task_tmp=$(mktemp -d /tmp/codex-task.XXXXXX)
+          echo "TMPDIR=$task_tmp" >> "$GITHUB_ENV"
+          TMPDIR="$task_tmp" scripts/build-release.sh "$GITHUB_REF_NAME" "$task_tmp/dist"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          flags=()
+          if [[ $GITHUB_REF_NAME == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" "$TMPDIR"/dist/* \
+            --verify-tag --title "sj $GITHUB_REF_NAME" --generate-notes "${flags[@]}"
+      - name: Clean temporary files
+        if: always()
+        shell: bash
+        run: |
+          if [[ ${TMPDIR:-} == /tmp/codex-task.* ]]; then
+            rm -rf -- "$TMPDIR"
+          fi

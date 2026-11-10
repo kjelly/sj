@@ -1,0 +1,5 @@
+/sj
+/a.zip
+/dist/
+*.test
+/coverage.out
